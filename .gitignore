@@ -1,0 +1,44 @@
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+
+# Python / FastAPI
+backend/venv/
+backend/__pycache__/
+backend/*/__pycache__/
+backend/*/*/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local Database & Media Storage (Crucial - never push uploaded/rendered videos to GitHub)
+backend/data/uploads/*
+backend/data/renders/*
+backend/data/subtitles/*
+backend/data/thumbnails/*
+backend/data/test_media/*
+backend/data/*.db
+backend/data/*.db-wal
+backend/data/*.db-shm
+backend/*.db
+!backend/data/uploads/.gitkeep
+!backend/data/renders/.gitkeep
+!backend/data/subtitles/.gitkeep
+!backend/data/thumbnails/.gitkeep
+
+# Large Binaries (FFmpeg/FFprobe - exceeds GitHub 100MB file limit)
+bin/
+*.exe
+*.dll
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
