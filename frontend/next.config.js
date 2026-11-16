@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: false,
   async rewrites() {
-    const target = process.env.BACKEND_URL || "https://scholar-manga-louis-advised.trycloudflare.com";
+    const target = process.env.BACKEND_URL || "https://herbs-youth-clothes-periodically.trycloudflare.com";
     return [
       {
         source: "/api/:path*",

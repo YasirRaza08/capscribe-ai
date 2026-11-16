@@ -150,34 +150,43 @@ def save_project(project: Project) -> Project:
     conn.close()
     return project
 
-def get_project(project_id: str, user_id: str = "dev-user-001") -> Optional[Project]:
+def get_project(project_id: str, user_id: Optional[str] = None) -> Optional[Project]:
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM projects WHERE id = ? AND user_id = ?", (project_id, user_id))
+    if user_id:
+        cursor.execute("SELECT * FROM projects WHERE id = ? AND (user_id = ? OR user_id = 'guest')", (project_id, user_id))
+    else:
+        cursor.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
     row = cursor.fetchone()
     conn.close()
     if row:
         return project_from_row(row)
     return None
 
-def list_projects(user_id: str = "dev-user-001") -> List[Project]:
+def list_projects(user_id: Optional[str] = "guest") -> List[Project]:
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM projects WHERE user_id = ? ORDER BY updated_at DESC", (user_id,))
+    if user_id and user_id != "*":
+        cursor.execute("SELECT * FROM projects WHERE user_id = ? ORDER BY updated_at DESC", (user_id,))
+    else:
+        cursor.execute("SELECT * FROM projects ORDER BY updated_at DESC")
     rows = cursor.fetchall()
     conn.close()
     return [project_from_row(r) for r in rows]
 
-def delete_project(project_id: str, user_id: str = "dev-user-001") -> bool:
+def delete_project(project_id: str, user_id: Optional[str] = None) -> bool:
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM projects WHERE id = ? AND user_id = ?", (project_id, user_id))
+    if user_id:
+        cursor.execute("DELETE FROM projects WHERE id = ? AND (user_id = ? OR user_id = 'guest')", (project_id, user_id))
+    else:
+        cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
     affected = cursor.rowcount > 0
     conn.commit()
     conn.close()
     return affected
 
-def duplicate_project(project_id: str, user_id: str = "dev-user-001") -> Optional[Project]:
+def duplicate_project(project_id: str, user_id: str = "guest") -> Optional[Project]:
     original = get_project(project_id, user_id)
     if not original:
         return None

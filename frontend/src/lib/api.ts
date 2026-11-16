@@ -2,20 +2,37 @@ import { Project, CaptionTemplate, UserProfile, JobStatus, StyleSettings, Captio
 
 const API_BASE = "/api";
 
+export function getClientId(): string {
+  if (typeof window === "undefined") return "guest";
+  let id = localStorage.getItem("capscribe_user_id");
+  if (!id) {
+    id = "usr_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    localStorage.setItem("capscribe_user_id", id);
+  }
+  return id;
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return {
+    "x-user-id": getClientId(),
+    ...extra,
+  };
+}
+
 export async function fetchUser(): Promise<UserProfile> {
-  const res = await fetch(`${API_BASE}/auth/me`);
+  const res = await fetch(`${API_BASE}/auth/me`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to load user profile");
   return res.json();
 }
 
 export async function fetchProjects(): Promise<Project[]> {
-  const res = await fetch(`${API_BASE}/projects`);
+  const res = await fetch(`${API_BASE}/projects`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to load projects");
   return res.json();
 }
 
 export async function fetchProject(id: string): Promise<Project> {
-  const res = await fetch(`${API_BASE}/projects/${id}`);
+  const res = await fetch(`${API_BASE}/projects/${id}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to load project");
   return res.json();
 }
@@ -23,7 +40,7 @@ export async function fetchProject(id: string): Promise<Project> {
 export async function updateProject(id: string, data: { title?: string; style?: StyleSettings; captions?: CaptionSegment[] }): Promise<Project> {
   const res = await fetch(`${API_BASE}/projects/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error("Failed to update project");
@@ -31,12 +48,18 @@ export async function updateProject(id: string, data: { title?: string; style?: 
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/projects/${id}`, { method: "DELETE" });
+  const res = await fetch(`${API_BASE}/projects/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to delete project");
 }
 
 export async function duplicateProject(id: string): Promise<Project> {
-  const res = await fetch(`${API_BASE}/projects/${id}/duplicate`, { method: "POST" });
+  const res = await fetch(`${API_BASE}/projects/${id}/duplicate`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to duplicate project");
   return res.json();
 }
@@ -54,6 +77,7 @@ export async function uploadVideo(file: File, title?: string, onProgress?: (pct:
 
   const res = await fetch(`${API_BASE}/upload`, {
     method: "POST",
+    headers: authHeaders(),
     body: formData,
   });
 
@@ -78,7 +102,7 @@ export async function startTranscription(
 ): Promise<{ job_id: string }> {
   const res = await fetch(`${API_BASE}/projects/${projectId}/transcribe`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({
       language: options?.language,
       writing_script: options?.writingScript,
@@ -98,7 +122,7 @@ export async function applyCaptionTool(
 ): Promise<Project> {
   const res = await fetch(`${API_BASE}/projects/${projectId}/caption-tools`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ action }),
   });
   if (!res.ok) throw new Error("Failed to apply caption tool");
@@ -108,7 +132,7 @@ export async function applyCaptionTool(
 export async function startExport(projectId: string, options: { resolution: string; aspect_ratio: string; burn_captions: boolean }): Promise<{ job_id: string }> {
   const res = await fetch(`${API_BASE}/projects/${projectId}/export`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(options),
   });
   if (!res.ok) throw new Error("Failed to start export");
@@ -122,7 +146,7 @@ export async function pollJob(jobId: string): Promise<JobStatus> {
 }
 
 export async function fetchAdminStats() {
-  const res = await fetch(`${API_BASE}/admin/stats`);
+  const res = await fetch(`${API_BASE}/admin/stats`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to fetch admin stats");
   return res.json();
 }

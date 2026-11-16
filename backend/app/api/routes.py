@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, Header
 from fastapi.responses import FileResponse
 
 from app.core.config import settings, UPLOADS_DIR, RENDERS_DIR, SUBTITLES_DIR
@@ -64,15 +64,17 @@ def get_single_template(template_id: str):
 # PROJECTS
 # -----------------
 @router.get("/projects", response_model=List[Project])
-def list_user_projects():
-    return list_projects("dev-user-001")
+def list_user_projects(x_user_id: Optional[str] = Header(None, alias="x-user-id")):
+    uid = x_user_id or "guest"
+    return list_projects(uid)
 
 @router.post("/projects", response_model=Project)
-def create_project(data: ProjectCreate):
+def create_project(data: ProjectCreate, x_user_id: Optional[str] = Header(None, alias="x-user-id")):
     project_id = f"proj_{uuid.uuid4().hex[:10]}"
+    uid = x_user_id or "guest"
     project = Project(
         id=project_id,
-        user_id="dev-user-001",
+        user_id=uid,
         title=data.title,
         status="created",
         style=get_template("viral_beast").style
@@ -80,15 +82,20 @@ def create_project(data: ProjectCreate):
     return save_project(project)
 
 @router.get("/projects/{project_id}", response_model=Project)
-def get_single_project(project_id: str):
-    proj = get_project(project_id, "dev-user-001")
+def get_single_project(project_id: str, x_user_id: Optional[str] = Header(None, alias="x-user-id")):
+    proj = get_project(project_id, x_user_id)
+    if not proj:
+        # Fallback to direct id lookup so direct links/shares work
+        proj = get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
     return proj
 
 @router.put("/projects/{project_id}", response_model=Project)
-def update_existing_project(project_id: str, data: ProjectUpdate):
-    proj = get_project(project_id, "dev-user-001")
+def update_existing_project(project_id: str, data: ProjectUpdate, x_user_id: Optional[str] = Header(None, alias="x-user-id")):
+    proj = get_project(project_id, x_user_id)
+    if not proj:
+        proj = get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
     
@@ -102,22 +109,25 @@ def update_existing_project(project_id: str, data: ProjectUpdate):
     return save_project(proj)
 
 @router.delete("/projects/{project_id}")
-def delete_single_project(project_id: str):
-    success = delete_project(project_id, "dev-user-001")
+def delete_single_project(project_id: str, x_user_id: Optional[str] = Header(None, alias="x-user-id")):
+    success = delete_project(project_id, x_user_id)
+    if not success:
+        # If not matched with user_id, try without restriction
+        success = delete_project(project_id)
     if not success:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"message": "Project deleted successfully", "id": project_id}
 
 @router.post("/projects/{project_id}/duplicate", response_model=Project)
-def duplicate_single_project(project_id: str):
-    copy_proj = duplicate_project(project_id, "dev-user-001")
+def duplicate_single_project(project_id: str, x_user_id: Optional[str] = Header(None, alias="x-user-id")):
+    copy_proj = duplicate_project(project_id, x_user_id or "guest")
     if not copy_proj:
         raise HTTPException(status_code=404, detail="Project not found")
     return copy_proj
 
 @router.post("/projects/{project_id}/caption-tools", response_model=Project)
 def apply_caption_tools(project_id: str, req: CaptionToolRequest):
-    proj = get_project(project_id, "dev-user-001")
+    proj = get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -149,7 +159,8 @@ def apply_caption_tools(project_id: str, req: CaptionToolRequest):
 @router.post("/upload")
 async def upload_video(
     file: UploadFile = File(...),
-    title: Optional[str] = Form(None)
+    title: Optional[str] = Form(None),
+    x_user_id: Optional[str] = Header(None, alias="x-user-id")
 ):
     # Validate extension
     ext = os.path.splitext(file.filename)[1].lower()
@@ -187,9 +198,10 @@ async def upload_video(
 
     # Auto create project
     proj_title = title or os.path.splitext(file.filename)[0]
+    uid = x_user_id or "guest"
     project = Project(
         id=project_id,
-        user_id="dev-user-001",
+        user_id=uid,
         title=proj_title,
         status="uploaded",
         original_video_name=file.filename,
@@ -222,7 +234,7 @@ def run_transcription_task(
 ):
     try:
         save_job(job_id, project_id, "transcription", "processing", 10, "Extracting audio stream from video...")
-        proj = get_project(project_id, "dev-user-001")
+        proj = get_project(project_id)
         if not proj or not proj.video_path or not os.path.exists(proj.video_path):
             save_job(job_id, project_id, "transcription", "failed", 0, "Video file not found", "Video path does not exist on disk.")
             return
@@ -266,7 +278,7 @@ def run_transcription_task(
 
     except Exception as e:
         save_job(job_id, project_id, "transcription", "failed", 0, "Transcription error", str(e))
-        proj = get_project(project_id, "dev-user-001")
+        proj = get_project(project_id)
         if proj:
             proj.status = "error"
             save_project(proj)
@@ -277,7 +289,7 @@ def start_transcription(
     req: TranscriptionRequest,
     background_tasks: BackgroundTasks
 ):
-    proj = get_project(project_id, "dev-user-001")
+    proj = get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
     if not proj.video_path or not os.path.exists(proj.video_path):
@@ -322,7 +334,7 @@ def check_job_status(job_id: str):
 def run_export_task(job_id: str, project_id: str, req: ExportRequest):
     try:
         save_job(job_id, project_id, "export", "rendering", 5, "Initializing FFmpeg render pipeline...")
-        proj = get_project(project_id, "dev-user-001")
+        proj = get_project(project_id)
         if not proj or not proj.video_path or not os.path.exists(proj.video_path):
             save_job(job_id, project_id, "export", "failed", 0, "Source video not found", "Source video missing.")
             return
@@ -378,7 +390,7 @@ def export_project_video(
     req: ExportRequest,
     background_tasks: BackgroundTasks
 ):
-    proj = get_project(project_id, "dev-user-001")
+    proj = get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -404,7 +416,7 @@ def stream_project_video(project_id: str):
     Direct, bulletproof project video streaming by project ID.
     Immune to hashtags, emojis, or URL encoding issues.
     """
-    proj = get_project(project_id, "dev-user-001")
+    proj = get_project(project_id)
     if not proj or not proj.video_path:
         raise HTTPException(status_code=404, detail="Project or video path not found")
     
@@ -474,8 +486,8 @@ def download_subtitle_file(filename: str):
 # -----------------
 @router.get("/admin/stats")
 def get_admin_system_stats():
-    profile = get_user_profile("dev-user-001")
-    projects = list_projects("dev-user-001")
+    profile = get_user_profile("guest")
+    projects = list_projects(None)
     
     # Calculate storage
     total_bytes = 0
