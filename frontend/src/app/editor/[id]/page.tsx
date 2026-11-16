@@ -658,7 +658,7 @@ export default function StudioEditorPage() {
   };
 
   // Caption Tools batch action
-  const handleCaptionTool = async (action: "auto_emoji" | "remove_emoji" | "uppercase" | "lowercase" | "capitalize" | "chunk_short") => {
+  const handleCaptionTool = async (action: "auto_emoji" | "remove_emoji" | "uppercase" | "lowercase" | "capitalize" | "chunk_short" | "roman_urdu") => {
     if (!project) return;
     try {
       setIsCaptionToolsOpen(false);
@@ -1003,6 +1003,16 @@ export default function StudioEditorPage() {
                         <div>
                           <div className="font-semibold text-white">⚡ Viral Short Cards (2-3 Words)</div>
                           <div className="text-[10px] text-gray-500">Split into snappy 2-3 word cards</div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => handleCaptionTool("roman_urdu")}
+                        className="w-full px-2.5 py-2 rounded-lg text-left flex items-center gap-2 hover:bg-emerald-500/20 text-gray-300 hover:text-emerald-300 transition-colors"
+                      >
+                        <span className="font-mono font-bold text-xs text-emerald-400 px-1 py-0.5 rounded bg-emerald-950 border border-emerald-500/40">RU</span>
+                        <div>
+                          <div className="font-semibold text-white">100% Roman Urdu (Latin)</div>
+                          <div className="text-[10px] text-gray-500">Convert all Urdu/Hindi letters to English</div>
                         </div>
                       </button>
                       <button

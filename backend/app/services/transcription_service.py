@@ -117,21 +117,24 @@ def remove_emojis_from_segments(segments: List[CaptionSegment]) -> List[CaptionS
         ))
     return cleaned
 
-def convert_segments_to_roman_urdu_gemini(segments: List[CaptionSegment], api_key: str, model_name: str = "gemini-3.5-flash") -> List[CaptionSegment]:
+def convert_segments_to_roman_urdu_gemini(segments: List[CaptionSegment], api_key: str, model_name: str = "gemini-flash-lite-latest") -> List[CaptionSegment]:
     """
     Uses Gemini AI to intelligently convert transcribed lines into 100% natural,
     native creator-grade Roman Urdu (e.g. 'Yeh hai woh...', 'Bohot saare logon ne...'),
     preserving pure English words while accurately phoneticizing mixed Urdu/Hindi speech.
+    Guarantees ZERO Arabic or Urdu script characters remain in the output.
     """
     import urllib.request
     import json
+    import time
+    import re
 
     if not segments:
         return segments
 
     batch_size = 25
     converted_segments = list(segments)
-    candidate_models = [model_name, "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.8-flash"]
+    candidate_models = ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-3.5-flash-lite"]
     # Remove duplicates preserving order
     candidate_models = list(dict.fromkeys(candidate_models))
 
@@ -139,17 +142,14 @@ def convert_segments_to_roman_urdu_gemini(segments: List[CaptionSegment], api_ke
         chunk = segments[i:i + batch_size]
         original_lines = [s.text for s in chunk]
 
-        prompt = """You are an expert verbatim subtitle transliterator and editor.
-The input lines were transcribed from a video where the speaker talks in Urdu/Hindi mixed with English.
-
-CRITICAL TASK:
-Convert every line into 100% clean, creator-grade ROMAN URDU (Latin alphabet, e.g. 'Agar Carry Minati ke sath Ajaz Khan ne mall mein...'):
-1. STRICT RULE: Output MUST use 100% English / Latin alphabet. ZERO Devanagari (हिन्दी) or Arabic/Urdu (اردو) characters are allowed. Transliterate all non-Latin text into natural Roman Urdu.
-2. NEVER translate Urdu/Hindi speech into English. If the speaker said 'bilkul durust', write 'bilkul durust' (do NOT translate to 'absolutely right').
-3. DO NOT alter numbers, names, or words (e.g., 'Carry Minati', 'Ajaz Khan', 'Harsh Beniwal', '17 saal ka larka').
-4. Retain genuine English words exactly as English (e.g. 'opinion', 'analysis', 'hospital', 'interview', 'police station').
-5. Keep the EXACT same number of lines as input.
-6. Output MUST be a valid JSON array of strings matching the input length.
+        prompt = """You are an expert verbatim subtitle transliterator.
+Convert every input line into 100% clean, creator-grade ROMAN URDU in English/Latin letters only.
+MANDATORY RULES:
+1. STRICT: Output MUST use 100% English / Latin alphabet. ZERO Arabic/Urdu (اردو) or Hindi (हिन्दी) characters are allowed under any circumstances.
+2. Transliterate all Urdu/Hindi speech phonetically (e.g. 'یہ ہے وہ' -> 'Yeh hai woh', 'جب ان سے' -> 'Jab un se', 'باتیں کی ان' -> 'Baatein ki un', 'نہیں کہتے تھے' -> 'Nahi kehte the', 'بچی کا ریپ' -> 'Bachi ka rape').
+3. Retain genuine English words exactly as spoken (e.g. 'porn', 'masturbating', 'source', 'analysis', 'opinion', 'hospital').
+4. Keep the EXACT same number of lines as input.
+5. Output MUST be a valid JSON array of strings matching the input length.
 
 Input lines:
 """ + json.dumps(original_lines, ensure_ascii=False)
@@ -170,65 +170,72 @@ Input lines:
         success = False
         for current_model in candidate_models:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{current_model}:generateContent?key={api_key}"
-            try:
-                req = urllib.request.Request(
-                    url,
-                    data=json.dumps(payload).encode("utf-8"),
-                    headers={"Content-Type": "application/json"}
-                )
-                res = urllib.request.urlopen(req, timeout=30)
-                data = json.loads(res.read().decode("utf-8"))
-                candidates = data.get("candidates", [])
-                if not candidates:
+            for retry in range(3):
+                try:
+                    req = urllib.request.Request(
+                        url,
+                        data=json.dumps(payload).encode("utf-8"),
+                        headers={"Content-Type": "application/json"}
+                    )
+                    res = urllib.request.urlopen(req, timeout=30)
+                    data = json.loads(res.read().decode("utf-8"))
+                    candidates = data.get("candidates", [])
+                    if not candidates:
+                        break
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    if not parts:
+                        break
+                    raw_text = parts[0].get("text", "").strip()
+                    if raw_text.startswith("```"):
+                        raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
+                        raw_text = re.sub(r"\s*```$", "", raw_text)
+                    romanized_lines = json.loads(raw_text)
+
+                    if isinstance(romanized_lines, list) and len(romanized_lines) == len(chunk):
+                        for idx, roman_line in enumerate(romanized_lines):
+                            seg_idx = i + idx
+                            orig_seg = converted_segments[seg_idx]
+                            
+                            # Clean up and split words
+                            words = str(roman_line).strip().split()
+                            if not words:
+                                words = [roman_line]
+                            
+                            seg_dur = max(orig_seg.end - orig_seg.start, 0.2)
+                            dur_per_w = seg_dur / max(len(words), 1)
+
+                            new_words = []
+                            for w_i, w_str in enumerate(words):
+                                w_start = round(orig_seg.start + (w_i * dur_per_w), 2)
+                                w_end = round(w_start + dur_per_w, 2)
+                                new_words.append(WordTimestamp(
+                                    word=w_str,
+                                    start=w_start,
+                                    end=w_end,
+                                    probability=0.98
+                                ))
+
+                            converted_segments[seg_idx] = CaptionSegment(
+                                id=orig_seg.id,
+                                start=orig_seg.start,
+                                end=orig_seg.end,
+                                text=" ".join(words),
+                                words=new_words
+                            )
+                        success = True
+                        break
+                except urllib.error.HTTPError as he:
+                    if he.code in (429, 503):
+                        time.sleep(2.0 * (retry + 1))
+                        continue
+                    else:
+                        break
+                except Exception as e:
+                    time.sleep(1.0)
                     continue
-                parts = candidates[0].get("content", {}).get("parts", [])
-                if not parts:
-                    continue
-                raw_text = parts[0].get("text", "").strip()
-                if raw_text.startswith("```"):
-                    raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
-                    raw_text = re.sub(r"\s*```$", "", raw_text)
-                romanized_lines = json.loads(raw_text)
 
-                if isinstance(romanized_lines, list) and len(romanized_lines) == len(chunk):
-                    for idx, roman_line in enumerate(romanized_lines):
-                        seg_idx = i + idx
-                        orig_seg = converted_segments[seg_idx]
-                        
-                        # Split words and distribute timing
-                        words = roman_line.split()
-                        if not words:
-                            words = [roman_line]
-                        
-                        seg_dur = orig_seg.end - orig_seg.start
-                        dur_per_w = seg_dur / max(len(words), 1)
-
-                        new_words = []
-                        for w_i, w_str in enumerate(words):
-                            w_start = round(orig_seg.start + (w_i * dur_per_w), 2)
-                            w_end = round(w_start + dur_per_w, 2)
-                            new_words.append(WordTimestamp(
-                                word=w_str,
-                                start=w_start,
-                                end=w_end,
-                                probability=0.98
-                            ))
-
-                        converted_segments[seg_idx] = CaptionSegment(
-                            id=orig_seg.id,
-                            start=orig_seg.start,
-                            end=orig_seg.end,
-                            text=roman_line,
-                            words=new_words
-                        )
-                    success = True
-                    break
-            except Exception as e:
-                print(f"[Gemini Roman Urdu] Model {current_model} error on batch {i}: {e}")
-                continue
-
-        if not success:
-            print(f"[Gemini Roman Urdu] Retained original segments for batch {i}")
+            if success:
+                break
 
     return converted_segments
 

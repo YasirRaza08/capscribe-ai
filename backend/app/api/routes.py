@@ -19,7 +19,7 @@ from app.models.schemas import (
     UserProfile, CaptionTemplate, CaptionToolRequest
 )
 from app.services.video_service import VideoService
-from app.services.transcription_service import TranscriptionService
+from app.services.transcription_service import TranscriptionService, convert_segments_to_roman_urdu_gemini
 from app.services.render_service import RenderService
 from app.templates.presets import CAPTION_TEMPLATES, get_template
 
@@ -162,6 +162,17 @@ def apply_caption_tools(project_id: str, req: CaptionToolRequest):
             s.text = s.text.title()
     elif req.action == "chunk_short":
         proj.captions = TranscriptionService.enforce_max_words_per_segment(proj.captions, max_words=proj.style.max_words_per_line or 3)
+    elif req.action == "roman_urdu":
+        if settings.GEMINI_API_KEY:
+            proj.captions = convert_segments_to_roman_urdu_gemini(
+                proj.captions,
+                api_key=settings.GEMINI_API_KEY,
+                model_name="gemini-flash-lite-latest"
+            )
+        proj.captions = TranscriptionService.enforce_max_words_per_segment(
+            proj.captions,
+            max_words=proj.style.max_words_per_line or 3
+        )
 
     return save_project(proj)
 
