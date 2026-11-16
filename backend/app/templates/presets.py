@@ -316,7 +316,7 @@ CAPTION_TEMPLATES: List[CaptionTemplate] = [
             alignment="center",
             text_transform="none",
             animation_type="bouncy_reveal",
-            max_words_per_line=4,
+            max_words_per_line=3,
         ),
     ),
     CaptionTemplate(

@@ -55,7 +55,7 @@ class StyleSettings(BaseModel):
         "slide_right", "reveal", "bouncy_reveal", "wheel", "fade_down",
         "flicker", "blur", "hop"
     ] = "word_highlight"
-    max_words_per_line: int = 4
+    max_words_per_line: int = 3
 
 class CaptionTemplate(BaseModel):
     id: str

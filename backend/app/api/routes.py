@@ -89,6 +89,13 @@ def get_single_project(project_id: str, x_user_id: Optional[str] = Header(None, 
         proj = get_project(project_id)
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    # Universally guarantee 2-3 words per card on load for every project and every user
+    limit = proj.style.max_words_per_line or 3
+    if proj.captions and any(len(c.words or c.text.split()) > limit for c in proj.captions):
+        proj.captions = TranscriptionService.enforce_max_words_per_segment(proj.captions, max_words=limit)
+        save_project(proj)
+
     return proj
 
 @router.put("/projects/{project_id}", response_model=Project)
@@ -104,7 +111,10 @@ def update_existing_project(project_id: str, data: ProjectUpdate, x_user_id: Opt
     if data.style is not None:
         proj.style = data.style
     if data.captions is not None:
-        proj.captions = data.captions
+        proj.captions = TranscriptionService.enforce_max_words_per_segment(
+            data.captions,
+            max_words=proj.style.max_words_per_line or 3
+        )
         
     return save_project(proj)
 
@@ -256,8 +266,14 @@ def run_transcription_task(
             model_size=model_size,
             roman_urdu=roman_urdu,
             add_emojis=add_emojis,
-            max_words_per_segment=proj.style.max_words_per_line or 4,
+            max_words_per_segment=min(proj.style.max_words_per_line or 3, 3),
             on_progress=transcription_progress
+        )
+
+        # Enforce viral short cards (max 2-3 words) across all models and languages
+        segments = TranscriptionService.enforce_max_words_per_segment(
+            segments,
+            max_words=min(proj.style.max_words_per_line or 3, 3)
         )
 
         save_job(job_id, project_id, "transcription", "processing", 85, "Formatting word timestamps and segments...")
