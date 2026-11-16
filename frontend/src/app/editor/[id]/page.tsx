@@ -48,7 +48,8 @@ import {
   Move,
   ArrowUp,
   ArrowDown,
-  X
+  X,
+  Zap
 } from "lucide-react";
 import {
   fetchProject,
@@ -61,6 +62,59 @@ import {
 } from "@/lib/api";
 import { Project, CaptionSegment, StyleSettings, CaptionTemplate, WordTimestamp } from "@/types";
 import { formatTime, formatDuration, formatBytes } from "@/lib/utils";
+
+function autoChunkCaptions(captions: CaptionSegment[], maxWords: number = 3): CaptionSegment[] {
+  if (!captions) return [];
+  const result: CaptionSegment[] = [];
+  const limit = Math.max(1, maxWords);
+  for (const seg of captions) {
+    const words = seg.words && seg.words.length > 0 ? seg.words : null;
+    if (!words) {
+      const rawWords = seg.text.trim().split(/\s+/).filter(Boolean);
+      if (rawWords.length <= limit) {
+        result.push(seg);
+        continue;
+      }
+      const durPerWord = (seg.end - seg.start) / Math.max(rawWords.length, 1);
+      const generatedWords: WordTimestamp[] = rawWords.map((rw, i) => ({
+        word: rw,
+        start: Number((seg.start + i * durPerWord).toFixed(2)),
+        end: Number((seg.start + (i + 1) * durPerWord).toFixed(2)),
+        probability: 0.99,
+      }));
+      for (let i = 0; i < generatedWords.length; i += limit) {
+        const slice = generatedWords.slice(i, i + limit);
+        result.push({
+          id: `seg_${Math.random().toString(36).substring(2, 10)}`,
+          start: slice[0].start,
+          end: slice[slice.length - 1].end,
+          text: slice.map((w) => w.word).join(" "),
+          words: slice,
+        });
+      }
+      continue;
+    }
+
+    if (words.length <= limit) {
+      result.push(seg);
+      continue;
+    }
+
+    for (let i = 0; i < words.length; i += limit) {
+      const slice = words.slice(i, i + limit);
+      if (slice.length > 0) {
+        result.push({
+          id: `seg_${Math.random().toString(36).substring(2, 10)}`,
+          start: slice[0].start,
+          end: slice[slice.length - 1].end,
+          text: slice.map((w) => w.word).join(" "),
+          words: slice,
+        });
+      }
+    }
+  }
+  return result;
+}
 
 export default function StudioEditorPage() {
   const params = useParams();
@@ -144,19 +198,27 @@ export default function StudioEditorPage() {
           fetchProject(projectId),
           fetchTemplates().catch(() => []),
         ]);
-        setProject(proj);
+        let finalProj = proj;
+        const maxWordsAllowed = proj.style?.max_words_per_line || 3;
+        const hasLongSegment = proj.captions?.some((c) => (c.words?.length || 0) > maxWordsAllowed || c.text.trim().split(/\s+/).length > maxWordsAllowed);
+        if (hasLongSegment) {
+          const chunked = autoChunkCaptions(proj.captions, maxWordsAllowed);
+          finalProj = { ...proj, captions: chunked };
+          triggerAutoSave(finalProj);
+        }
+        setProject(finalProj);
         setTemplates(tpls);
 
         // Auto-adapt aspect ratio from project metadata if available
-        if (proj.metadata?.aspect_ratio) {
-          if (proj.metadata.aspect_ratio === "9:16" || proj.metadata.aspect_ratio === "16:9" || proj.metadata.aspect_ratio === "1:1") {
-            setAspectRatioMode(proj.metadata.aspect_ratio);
+        if (finalProj.metadata?.aspect_ratio) {
+          if (finalProj.metadata.aspect_ratio === "9:16" || finalProj.metadata.aspect_ratio === "16:9" || finalProj.metadata.aspect_ratio === "1:1") {
+            setAspectRatioMode(finalProj.metadata.aspect_ratio);
           }
         }
 
-        if (proj.captions && proj.captions.length > 0) {
-          setSelectedSegmentId(proj.captions[0].id);
-        } else if (proj.status === "uploaded" || (!proj.captions || proj.captions.length === 0)) {
+        if (finalProj.captions && finalProj.captions.length > 0) {
+          setSelectedSegmentId(finalProj.captions[0].id);
+        } else if (finalProj.status === "uploaded" || (!finalProj.captions || finalProj.captions.length === 0)) {
           // Autonomous UX: Automatically present caption generation if not yet transcribed
           setIsPrepareMediaOpen(true);
         }
@@ -579,12 +641,35 @@ export default function StudioEditorPage() {
     triggerAutoSave({ ...project, captions: updated });
   };
 
+  // Re-chunk captions on slider change
+  const handleUpdateWordsPerCard = (newLimit: number) => {
+    if (!project) return;
+    const chunked = autoChunkCaptions(project.captions, newLimit);
+    const updated = {
+      ...project,
+      captions: chunked,
+      style: {
+        ...project.style,
+        max_words_per_line: newLimit,
+      },
+    };
+    setProject(updated);
+    triggerAutoSave(updated);
+  };
+
   // Caption Tools batch action
-  const handleCaptionTool = async (action: "auto_emoji" | "remove_emoji" | "uppercase" | "lowercase" | "capitalize") => {
+  const handleCaptionTool = async (action: "auto_emoji" | "remove_emoji" | "uppercase" | "lowercase" | "capitalize" | "chunk_short") => {
     if (!project) return;
     try {
       setIsCaptionToolsOpen(false);
       setSaveStatus("saving");
+      if (action === "chunk_short") {
+        const limit = project.style?.max_words_per_line || 3;
+        const chunked = autoChunkCaptions(project.captions, limit);
+        const optimistic = { ...project, captions: chunked };
+        setProject(optimistic);
+        triggerAutoSave(optimistic);
+      }
       const updated = await applyCaptionTool(project.id, action);
       setProject(updated);
       setSaveStatus("saved");
@@ -910,6 +995,16 @@ export default function StudioEditorPage() {
                       <div className="px-2 py-1 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
                         Viral Caption Tools
                       </div>
+                      <button
+                        onClick={() => handleCaptionTool("chunk_short")}
+                        className="w-full px-2.5 py-2 rounded-lg text-left flex items-center gap-2 hover:bg-amber-500/20 text-gray-300 hover:text-amber-300 transition-colors"
+                      >
+                        <Zap className="w-4 h-4 text-amber-400" />
+                        <div>
+                          <div className="font-semibold text-white">⚡ Viral Short Cards (2-3 Words)</div>
+                          <div className="text-[10px] text-gray-500">Split into snappy 2-3 word cards</div>
+                        </div>
+                      </button>
                       <button
                         onClick={() => handleCaptionTool("auto_emoji")}
                         className="w-full px-2.5 py-2 rounded-lg text-left flex items-center gap-2 hover:bg-emerald-500/20 text-gray-300 hover:text-emerald-300 transition-colors"
@@ -2345,10 +2440,10 @@ export default function StudioEditorPage() {
                   </div>
                   <input
                     type="range"
-                    min="2"
-                    max="6"
+                    min="1"
+                    max="5"
                     value={style.max_words_per_line || 3}
-                    onChange={(e) => handleUpdateStyle("max_words_per_line", parseInt(e.target.value))}
+                    onChange={(e) => handleUpdateWordsPerCard(parseInt(e.target.value))}
                     className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                   />
                   <span className="text-[10px] text-gray-500 block mt-1">

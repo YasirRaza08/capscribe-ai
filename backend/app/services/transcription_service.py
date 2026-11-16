@@ -699,6 +699,7 @@ Return valid JSON:
                     detected_lang, segments = groq_result
                     if add_emojis:
                         segments = enrich_segments_with_emojis(segments)
+                    segments = cls.enforce_max_words_per_segment(segments, max_words=max_words_per_segment or 3)
                     return detected_lang, segments
             except Exception as e:
                 print(f"[Groq Whisper Tier 1] Fallback to Gemini: {e}")
@@ -716,6 +717,7 @@ Return valid JSON:
                     detected_lang, segments = gemini_result
                     if add_emojis:
                         segments = enrich_segments_with_emojis(segments)
+                    segments = cls.enforce_max_words_per_segment(segments, max_words=max_words_per_segment or 3)
                     return detected_lang, segments
             except Exception as e:
                 print(f"[Gemini Direct Audio] Fallback to Whisper: {e}")
@@ -832,6 +834,7 @@ Return valid JSON:
         if add_emojis:
             final_segments = enrich_segments_with_emojis(final_segments)
 
+        final_segments = cls.enforce_max_words_per_segment(final_segments, max_words=max_words_per_segment or 3)
         return detected_language, final_segments
 
     @staticmethod
@@ -859,12 +862,53 @@ Return valid JSON:
         return output_path
 
     @staticmethod
-    def enrich_with_emojis(segments: List[CaptionSegment]) -> List[CaptionSegment]:
-        return enrich_segments_with_emojis(segments)
+    def enforce_max_words_per_segment(segments: List[CaptionSegment], max_words: int = 3) -> List[CaptionSegment]:
+        """
+        Guarantees that every caption segment has at most `max_words` (e.g. 2 to 3 words max).
+        Splits any long sentences into fast, snappy, viral subtitle cards preserving word timestamps.
+        """
+        if not segments:
+            return []
+        effective_max = max(1, max_words or 3)
+        result: List[CaptionSegment] = []
+        for seg in segments:
+            if not seg.words:
+                words = seg.text.strip().split()
+                if len(words) <= effective_max:
+                    result.append(seg)
+                    continue
+                dur = (seg.end - seg.start) / max(len(words), 1)
+                seg_words = [
+                    WordTimestamp(
+                        word=w,
+                        start=round(seg.start + i * dur, 2),
+                        end=round(seg.start + (i + 1) * dur, 2),
+                        probability=0.99
+                    )
+                    for i, w in enumerate(words)
+                ]
+            else:
+                seg_words = seg.words
 
-    @staticmethod
-    def remove_emojis(segments: List[CaptionSegment]) -> List[CaptionSegment]:
-        return remove_emojis_from_segments(segments)
+            if len(seg_words) <= effective_max:
+                result.append(seg)
+                continue
+
+            for i in range(0, len(seg_words), effective_max):
+                slice_words = seg_words[i:i + effective_max]
+                if not slice_words:
+                    continue
+                chunk_start = slice_words[0].start
+                chunk_end = slice_words[-1].end
+                chunk_text = " ".join(w.word for w in slice_words)
+                result.append(CaptionSegment(
+                    id=f"seg_{uuid.uuid4().hex[:8]}",
+                    start=chunk_start,
+                    end=chunk_end,
+                    text=chunk_text,
+                    words=list(slice_words)
+                ))
+        return result
 
     @staticmethod
     def generate_vtt(segments: List[CaptionSegment], output_path: str) -> str:
@@ -891,9 +935,50 @@ Return valid JSON:
         return output_path
 
     @staticmethod
-    def enrich_with_emojis(segments: List[CaptionSegment]) -> List[CaptionSegment]:
-        return enrich_segments_with_emojis(segments)
+    def enforce_max_words_per_segment(segments: List[CaptionSegment], max_words: int = 3) -> List[CaptionSegment]:
+        """
+        Guarantees that every caption segment has at most `max_words` (e.g. 2 to 3 words max).
+        Splits any long sentences into fast, snappy, viral subtitle cards preserving word timestamps.
+        """
+        if not segments:
+            return []
+        effective_max = max(1, max_words or 3)
+        result: List[CaptionSegment] = []
+        for seg in segments:
+            if not seg.words:
+                words = seg.text.strip().split()
+                if len(words) <= effective_max:
+                    result.append(seg)
+                    continue
+                dur = (seg.end - seg.start) / max(len(words), 1)
+                seg_words = [
+                    WordTimestamp(
+                        word=w,
+                        start=round(seg.start + i * dur, 2),
+                        end=round(seg.start + (i + 1) * dur, 2),
+                        probability=0.99
+                    )
+                    for i, w in enumerate(words)
+                ]
+            else:
+                seg_words = seg.words
 
-    @staticmethod
-    def remove_emojis(segments: List[CaptionSegment]) -> List[CaptionSegment]:
-        return remove_emojis_from_segments(segments)
+            if len(seg_words) <= effective_max:
+                result.append(seg)
+                continue
+
+            for i in range(0, len(seg_words), effective_max):
+                slice_words = seg_words[i:i + effective_max]
+                if not slice_words:
+                    continue
+                chunk_start = slice_words[0].start
+                chunk_end = slice_words[-1].end
+                chunk_text = " ".join(w.word for w in slice_words)
+                result.append(CaptionSegment(
+                    id=f"seg_{uuid.uuid4().hex[:8]}",
+                    start=chunk_start,
+                    end=chunk_end,
+                    text=chunk_text,
+                    words=list(slice_words)
+                ))
+        return result

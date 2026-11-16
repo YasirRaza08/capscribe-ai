@@ -56,6 +56,11 @@ class RenderService:
         karaoke highlighting and custom typography.
         """
         # Scale font size relative to 1080p canvas
+        from app.services.transcription_service import TranscriptionService
+        segments = TranscriptionService.enforce_max_words_per_segment(
+            segments,
+            max_words=style.max_words_per_line or 3
+        )
         base_canvas_h = max(video_height, 720)
         scale_factor = base_canvas_h / 1080.0
         font_size = max(int(style.font_size * scale_factor), 18)

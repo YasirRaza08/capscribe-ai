@@ -150,6 +150,8 @@ def apply_caption_tools(project_id: str, req: CaptionToolRequest):
             for w in s.words:
                 w.word = w.word.capitalize()
             s.text = s.text.title()
+    elif req.action == "chunk_short":
+        proj.captions = TranscriptionService.enforce_max_words_per_segment(proj.captions, max_words=proj.style.max_words_per_line or 3)
 
     return save_project(proj)
 

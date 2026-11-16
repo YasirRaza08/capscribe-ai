@@ -117,7 +117,7 @@ class ExportRequest(BaseModel):
     format: Literal["mp4", "srt", "vtt"] = "mp4"
 
 class CaptionToolRequest(BaseModel):
-    action: Literal["auto_emoji", "remove_emoji", "uppercase", "lowercase", "capitalize"]
+    action: Literal["auto_emoji", "remove_emoji", "uppercase", "lowercase", "capitalize", "chunk_short"]
 
 class ExportJobStatus(BaseModel):
     job_id: str

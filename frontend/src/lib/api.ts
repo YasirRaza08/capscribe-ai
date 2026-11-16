@@ -118,7 +118,7 @@ export async function startTranscription(
 
 export async function applyCaptionTool(
   projectId: string,
-  action: "auto_emoji" | "remove_emoji" | "uppercase" | "lowercase" | "capitalize"
+  action: "auto_emoji" | "remove_emoji" | "uppercase" | "lowercase" | "capitalize" | "chunk_short"
 ): Promise<Project> {
   const res = await fetch(`${API_BASE}/projects/${projectId}/caption-tools`, {
     method: "POST",
