@@ -2,10 +2,11 @@
 const nextConfig = {
   reactStrictMode: false,
   async rewrites() {
+    const target = process.env.BACKEND_URL || "https://capscribe-yasir.loca.lt";
     return [
       {
         source: "/api/:path*",
-        destination: "http://127.0.0.1:8000/api/:path*",
+        destination: `${target}/api/:path*`,
       },
     ];
   },
