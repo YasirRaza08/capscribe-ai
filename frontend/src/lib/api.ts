@@ -70,23 +70,64 @@ export async function fetchTemplates(): Promise<CaptionTemplate[]> {
   return res.json();
 }
 
-export async function uploadVideo(file: File, title?: string, onProgress?: (pct: number) => void): Promise<{ project: Project }> {
-  const formData = new FormData();
-  formData.append("file", file);
-  if (title) formData.append("title", title);
+export async function uploadVideo(
+  file: File,
+  title?: string,
+  onProgress?: (pct: number) => void
+): Promise<{ project: Project }> {
+  // Use 2.5 MB chunks so every request is safely under Vercel's 4.5MB limit and Cloudflare's 100MB limit
+  const CHUNK_SIZE = 2.5 * 1024 * 1024;
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const uploadId = "upl_" + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+  const sanitizedTitle = title || file.name.replace(/\.[^/.]+$/, "");
 
-  const res = await fetch(`${API_BASE}/upload`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: formData,
-  });
+  for (let index = 0; index < totalChunks; index++) {
+    const start = index * CHUNK_SIZE;
+    const end = Math.min(file.size, start + CHUNK_SIZE);
+    const chunkBlob = file.slice(start, end);
 
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ detail: "Upload failed" }));
-    throw new Error(errorData.detail || "Video upload failed");
+    const formData = new FormData();
+    formData.append("chunk", chunkBlob, file.name);
+    formData.append("upload_id", uploadId);
+    formData.append("chunk_index", index.toString());
+    formData.append("total_chunks", totalChunks.toString());
+    formData.append("filename", file.name);
+    if (sanitizedTitle) formData.append("title", sanitizedTitle);
+
+    let res: Response | null = null;
+    let attempts = 0;
+    while (attempts < 3) {
+      try {
+        res = await fetch(`${API_BASE}/upload/chunk`, {
+          method: "POST",
+          headers: authHeaders(),
+          body: formData,
+        });
+        if (res.ok) break;
+      } catch (e) {
+        // network blip, retry after short pause
+      }
+      attempts++;
+      if (attempts < 3) await new Promise((r) => setTimeout(r, 1000));
+    }
+
+    if (!res || !res.ok) {
+      const errorData = res ? await res.json().catch(() => ({ detail: "Chunk upload failed" })) : { detail: "Network connection lost" };
+      throw new Error(errorData.detail || `Upload failed on chunk ${index + 1}/${totalChunks}`);
+    }
+
+    if (onProgress) {
+      const pct = Math.round(((index + 1) / totalChunks) * 100);
+      onProgress(pct);
+    }
+
+    if (index === totalChunks - 1) {
+      const data = await res.json();
+      return { project: data.project };
+    }
   }
 
-  return res.json();
+  throw new Error("Upload ended unexpectedly");
 }
 
 export async function startTranscription(

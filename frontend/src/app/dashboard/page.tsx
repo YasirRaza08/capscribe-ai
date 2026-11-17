@@ -111,14 +111,12 @@ export default function DashboardPage() {
     try {
       setIsUploading(true);
       setUploadError(null);
-      setUploadProgress(20);
+      setUploadProgress(1);
 
-      const interval = setInterval(() => {
-        setUploadProgress((p) => (p < 85 ? p + 15 : p));
-      }, 300);
+      const result = await uploadVideo(uploadFile, uploadTitle, (pct) => {
+        setUploadProgress(pct);
+      });
 
-      const result = await uploadVideo(uploadFile, uploadTitle);
-      clearInterval(interval);
       setUploadProgress(100);
 
       // Close modal and redirect to editor
@@ -524,12 +522,16 @@ export default function DashboardPage() {
             {isUploading && (
               <div className="mt-4 space-y-2">
                 <div className="flex justify-between text-xs text-gray-400">
-                  <span>Uploading & Probing video stream...</span>
-                  <span className="font-mono">{uploadProgress}%</span>
+                  <span>
+                    {uploadProgress >= 100
+                      ? "Assembling & Probing video stream..."
+                      : `Uploading chunked video (${uploadProgress}%)...`}
+                  </span>
+                  <span className="font-mono text-blue-400 font-semibold">{uploadProgress}%</span>
                 </div>
                 <div className="w-full h-2 rounded-full bg-gray-800 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300"
+                    className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500 transition-all duration-200"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>

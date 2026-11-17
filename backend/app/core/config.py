@@ -36,6 +36,8 @@ class Settings(BaseModel):
         "http://127.0.0.1:3000",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
+        "https://capscribe-ai.vercel.app",
+        "https://capscribe-ai-yasirraza08s-projects.vercel.app",
     ]
     
     # Storage & Upload limits

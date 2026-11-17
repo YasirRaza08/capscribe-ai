@@ -242,6 +242,113 @@ async def upload_video(
         "metadata": metadata
     }
 
+@router.post("/upload/chunk")
+async def upload_chunk(
+    chunk: UploadFile = File(...),
+    upload_id: str = Form(...),
+    chunk_index: int = Form(...),
+    total_chunks: int = Form(...),
+    filename: str = Form(...),
+    title: Optional[str] = Form(None),
+    x_user_id: Optional[str] = Header(None, alias="x-user-id")
+):
+    """
+    Chunked upload endpoint for seamless uploading of large video files of ANY size (up to 500MB+).
+    Bypasses Vercel Serverless 4.5MB payload limits and Cloudflare 100MB proxy limits.
+    """
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in settings.ALLOWED_VIDEO_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file format '{ext}'. Allowed: {', '.join(settings.ALLOWED_VIDEO_EXTENSIONS)}"
+        )
+
+    safe_upload_id = re.sub(r'[^a-zA-Z0-9_\-]', '', upload_id)
+    if not safe_upload_id:
+        raise HTTPException(status_code=400, detail="Invalid upload_id")
+
+    temp_dir = UPLOADS_DIR / f"_chunk_{safe_upload_id}"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    chunk_file = temp_dir / f"part_{chunk_index:05d}.bin"
+    with open(chunk_file, "wb") as f:
+        shutil.copyfileobj(chunk.file, f)
+
+    # Check if all chunks have arrived
+    parts = list(temp_dir.glob("part_*.bin"))
+    if len(parts) < total_chunks:
+        return {
+            "status": "chunk_received",
+            "chunk_index": chunk_index,
+            "received": len(parts),
+            "total": total_chunks
+        }
+
+    # Check that every index from 0 to total_chunks - 1 exists
+    for i in range(total_chunks):
+        if not (temp_dir / f"part_{i:05d}.bin").exists():
+            return {
+                "status": "waiting_chunks",
+                "received": len(parts),
+                "total": total_chunks,
+                "missing": i
+            }
+
+    # All chunks received! Stitch together into final file
+    project_id = f"proj_{uuid.uuid4().hex[:10]}"
+    raw_stem = os.path.splitext(filename)[0]
+    clean_stem = re.sub(r'[^a-zA-Z0-9_\-]', '_', raw_stem).strip('_')
+    if not clean_stem:
+        clean_stem = "video"
+    safe_filename = f"{project_id}_{clean_stem}{ext}"
+    save_path = UPLOADS_DIR / safe_filename
+
+    try:
+        with open(save_path, "wb") as outfile:
+            for i in range(total_chunks):
+                part_path = temp_dir / f"part_{i:05d}.bin"
+                with open(part_path, "rb") as infile:
+                    shutil.copyfileobj(infile, outfile)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+    # Validate with FFprobe
+    try:
+        metadata = VideoService.probe_video(str(save_path))
+    except Exception as e:
+        if save_path.exists():
+            os.remove(save_path)
+        raise HTTPException(status_code=400, detail=f"Invalid or corrupted video file: {str(e)}")
+
+    # Generate thumbnail
+    thumb_path = VideoService.generate_thumbnail(str(save_path), project_id)
+    thumb_url = f"/api/media/thumbnail/{os.path.basename(thumb_path)}" if thumb_path else None
+    video_url = f"/api/projects/{project_id}/video"
+
+    # Create project record
+    proj_title = title or os.path.splitext(filename)[0]
+    uid = x_user_id or "guest"
+    project = Project(
+        id=project_id,
+        user_id=uid,
+        title=proj_title,
+        status="uploaded",
+        original_video_name=filename,
+        video_path=str(save_path),
+        video_url=video_url,
+        thumbnail_path=thumb_path,
+        thumbnail_url=thumb_url,
+        metadata=metadata,
+        style=get_template("viral_beast").style
+    )
+    save_project(project)
+
+    return {
+        "status": "complete",
+        "project": project,
+        "metadata": metadata
+    }
+
 # -----------------
 # AI TRANSCRIPTION
 # -----------------
