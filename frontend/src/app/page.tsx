@@ -64,6 +64,7 @@ export default function HomePage() {
 
   const languages = [
     { name: "English", code: "EN", badge: "Auto-detect" },
+    { name: "Hinglish", code: "HI/UR", badge: "Reels & Shorts" },
     { name: "Urdu", code: "UR", badge: "Nastaliq & Roman" },
     { name: "Hindi", code: "HI", badge: "Devanagari" },
     { name: "Punjabi", code: "PA", badge: "Gurmukhi & Shahmukhi" },
@@ -122,8 +123,8 @@ export default function HomePage() {
       a: "Absolutely. The studio editor provides word-level chip editing where you can fix spelling, split or merge subtitle segments, and adjust millisecond start and end times directly on the visual timeline.",
     },
     {
-      q: "Does it support Urdu and Roman Urdu?",
-      a: "Yes. The Whisper model recognizes Urdu and Hindi speech natively, and we also provide a phonetic Roman Urdu transliteration mode for content creators targeting youth social media audiences.",
+      q: "Does it support Hinglish and Roman Urdu?",
+      a: "Yes! CapScribe automatically converts spoken Hindi and Urdu into 100% pure Hinglish / Roman Urdu (Latin English alphabet) formatted in high-retention 2-3 word cards perfect for Reels, Shorts, and TikTok.",
     },
     {
       q: "What video formats and aspect ratios are supported?",
@@ -288,7 +289,7 @@ export default function HomePage() {
             <h2 className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2">Global Reach</h2>
             <p className="text-3xl sm:text-4xl font-extrabold text-white">Transcribe In 90+ Languages</p>
             <p className="mt-3 text-sm text-gray-400">
-              Automatic speech detection with dedicated support for Urdu, Roman Urdu, Hindi, Arabic, Punjabi, and English.
+              Automatic speech detection with dedicated support for Hinglish, Roman Urdu, Urdu, Hindi, Arabic, Punjabi, and English.
             </p>
           </div>
 

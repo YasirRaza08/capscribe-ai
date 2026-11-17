@@ -1009,10 +1009,10 @@ export default function StudioEditorPage() {
                         onClick={() => handleCaptionTool("roman_urdu")}
                         className="w-full px-2.5 py-2 rounded-lg text-left flex items-center gap-2 hover:bg-emerald-500/20 text-gray-300 hover:text-emerald-300 transition-colors"
                       >
-                        <span className="font-mono font-bold text-xs text-emerald-400 px-1 py-0.5 rounded bg-emerald-950 border border-emerald-500/40">RU</span>
+                        <span className="font-mono font-bold text-xs text-emerald-400 px-1 py-0.5 rounded bg-emerald-950 border border-emerald-500/40">HI</span>
                         <div>
-                          <div className="font-semibold text-white">100% Roman Urdu (Latin)</div>
-                          <div className="text-[10px] text-gray-500">Convert all Urdu/Hindi letters to English</div>
+                          <div className="font-semibold text-white">100% Hinglish / Roman Urdu</div>
+                          <div className="text-[10px] text-gray-500">Convert Hindi/Urdu to pure English alphabet</div>
                         </div>
                       </button>
                       <button
@@ -2549,7 +2549,7 @@ export default function StudioEditorPage() {
                       className="w-full px-3 py-2 rounded-xl bg-gray-950 border border-gray-800 text-white focus:outline-none focus:border-emerald-500"
                     >
                       <option value="latin">Latin / English Script</option>
-                      <option value="roman_urdu">Roman Urdu (for Reels/TikTok)</option>
+                      <option value="roman_urdu">Hinglish / Roman Urdu (for Reels/TikTok)</option>
                       <option value="nastaliq">Nastaliq Urdu (اردو)</option>
                       <option value="devanagari">Devanagari (हिन्दी)</option>
                       <option value="arabic">Arabic (العربية)</option>

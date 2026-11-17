@@ -41,7 +41,7 @@ export default function Footer() {
             <h4 className="text-xs font-semibold text-gray-200 tracking-wider uppercase">Supported Languages</h4>
             <ul className="space-y-2 text-sm">
               <li className="text-gray-300">English (Auto-transcribe)</li>
-              <li className="text-gray-300">Urdu & Roman Urdu</li>
+              <li className="text-gray-300">Hinglish & Roman Urdu</li>
               <li className="text-gray-300">Hindi & Punjabi</li>
               <li className="text-gray-300">Arabic & Persian</li>
               <li className="text-gray-300">90+ Global Languages</li>

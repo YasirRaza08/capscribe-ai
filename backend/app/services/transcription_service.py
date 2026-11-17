@@ -120,9 +120,9 @@ def remove_emojis_from_segments(segments: List[CaptionSegment]) -> List[CaptionS
 def convert_segments_to_roman_urdu_gemini(segments: List[CaptionSegment], api_key: str, model_name: str = "gemini-flash-lite-latest") -> List[CaptionSegment]:
     """
     Uses Gemini AI to intelligently convert transcribed lines into 100% natural,
-    native creator-grade Roman Urdu (e.g. 'Yeh hai woh...', 'Bohot saare logon ne...'),
-    preserving pure English words while accurately phoneticizing mixed Urdu/Hindi speech.
-    Guarantees ZERO Arabic or Urdu script characters remain in the output.
+    native creator-grade Hinglish / Roman Urdu (e.g. 'Yeh hai woh...', 'Bohot saare logon ne...'),
+    preserving pure English words while accurately phoneticizing mixed Hindi/Urdu speech.
+    Guarantees ZERO Arabic, Urdu, or Devanagari script characters remain in the output.
     """
     import urllib.request
     import json
@@ -143,11 +143,11 @@ def convert_segments_to_roman_urdu_gemini(segments: List[CaptionSegment], api_ke
         original_lines = [s.text for s in chunk]
 
         prompt = """You are an expert verbatim subtitle transliterator.
-Convert every input line into 100% clean, creator-grade ROMAN URDU in English/Latin letters only.
+Convert every input line into 100% clean, creator-grade HINGLISH / ROMAN URDU in English/Latin letters only.
 MANDATORY RULES:
-1. STRICT: Output MUST use 100% English / Latin alphabet. ZERO Arabic/Urdu (اردو) or Hindi (हिन्दी) characters are allowed under any circumstances.
-2. Transliterate all Urdu/Hindi speech phonetically (e.g. 'یہ ہے وہ' -> 'Yeh hai woh', 'جب ان سے' -> 'Jab un se', 'باتیں کی ان' -> 'Baatein ki un', 'نہیں کہتے تھے' -> 'Nahi kehte the', 'بچی کا ریپ' -> 'Bachi ka rape').
-3. Retain genuine English words exactly as spoken (e.g. 'porn', 'masturbating', 'source', 'analysis', 'opinion', 'hospital').
+1. STRICT: Output MUST use 100% English / Latin alphabet. ZERO Arabic/Urdu (اردو) or Hindi (हिन्दी / Devanagari) characters are allowed under any circumstances.
+2. Transliterate all Hindi/Urdu speech phonetically (e.g. 'یہ ہے وہ' / 'यह है वह' -> 'Yeh hai woh', 'جب ان سے' / 'जब उनसे' -> 'Jab un se', 'باتیں کی ان' -> 'Baatein ki un', 'نہیں کہتے تھے' -> 'Nahi kehte the', 'بچی کا ریپ' -> 'Bachi ka rape').
+3. Retain genuine English words exactly as spoken (e.g. 'porn', 'masturbating', 'source', 'analysis', 'opinion', 'hospital', 'challenge').
 4. Keep the EXACT same number of lines as input.
 5. Output MUST be a valid JSON array of strings matching the input length.
 
