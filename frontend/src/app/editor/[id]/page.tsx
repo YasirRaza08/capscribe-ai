@@ -60,6 +60,7 @@ import {
   pollJob,
   applyCaptionTool
 } from "@/lib/api";
+import { getVideoBlob } from "@/lib/videoStorage";
 import { Project, CaptionSegment, StyleSettings, CaptionTemplate, WordTimestamp } from "@/types";
 import { formatTime, formatDuration, formatBytes } from "@/lib/utils";
 
@@ -140,6 +141,7 @@ export default function StudioEditorPage() {
   const [isMuted, setIsMuted] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [aspectRatioMode, setAspectRatioMode] = useState<"original" | "9:16" | "16:9" | "1:1">("original");
+  const [videoSourceUrl, setVideoSourceUrl] = useState<string>("");
 
   // Drag and drop text positioning state
   const [isDraggingText, setIsDraggingText] = useState(false);
@@ -208,6 +210,14 @@ export default function StudioEditorPage() {
         }
         setProject(finalProj);
         setTemplates(tpls);
+
+        // Resolve video source: check browser IndexedDB first, then backend URL
+        const localBlob = await getVideoBlob(projectId).catch(() => null);
+        if (localBlob) {
+          setVideoSourceUrl(URL.createObjectURL(localBlob));
+        } else {
+          setVideoSourceUrl(`/api/projects/${projectId}/video`);
+        }
 
         // Auto-adapt aspect ratio from project metadata if available
         if (finalProj.metadata?.aspect_ratio) {
@@ -1200,7 +1210,7 @@ export default function StudioEditorPage() {
               {project ? (
                 <video
                   ref={videoRef}
-                  src={`/api/projects/${project.id}/video`}
+                  src={videoSourceUrl || `/api/projects/${project.id}/video`}
                   className="w-full h-full object-contain pointer-events-none"
                   playsInline
                   preload="auto"
