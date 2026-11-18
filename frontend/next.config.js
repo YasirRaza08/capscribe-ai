@@ -2,11 +2,13 @@
 const nextConfig = {
   reactStrictMode: false,
   async rewrites() {
-    const target = process.env.BACKEND_URL || "https://affects-affected-associated-powder.trycloudflare.com";
+    if (!process.env.BACKEND_URL) {
+      return [];
+    }
     return [
       {
         source: "/api/:path*",
-        destination: `${target}/api/:path*`,
+        destination: `${process.env.BACKEND_URL}/api/:path*`,
       },
     ];
   },
